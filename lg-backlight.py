@@ -1,7 +1,7 @@
-from bscpylgtv import WebOsClient
-import paho.mqtt.client as mqtt
+import os, asyncio
 
-import subprocess, os, asyncio
+from bscpylgtv import WebOsClient
+import asyncio_mqtt as mqtt
 
 MQTT_SERVER = os.environ['MQTT_SERVER']
 MQTT_PORT = int(os.environ['MQTT_PORT'])
@@ -12,29 +12,22 @@ TV_IP = os.environ['TV_IP']
 MQTT_PATH = "home-assistant/lg_brightness/#"
 
 async def set_backlight(backlight):
-    client = await WebOsClient.create(TV_IP)
-    await client.disconnect()
-    await client.connect()
+	client = await WebOsClient.create(TV_IP)
+	await client.disconnect()
+	await client.connect()
 
-    await client.set_current_picture_settings({"backlight": int(backlight)})
-    await client.disconnect()
+	await client.set_current_picture_settings({"backlight": int(backlight)})
+	await client.disconnect()
 
-class Listener:
-    def __init__(self):
-        print(MQTT_SERVER)
-        print(MQTT_PORT)
-        self.client = mqtt.Client()
-        self.client.on_connect = self.on_connect
-        self.client.on_message = self.on_message
-        self.client.username_pw_set(MQTT_USER, MQTT_PASSWORD)
-        self.client.connect(MQTT_SERVER, MQTT_PORT, 60)
-        self.client.loop_forever()
-    def on_connect(self, client, userdata, flags, rc):
-        print("Connected with result code " + str(rc))
-        self.client.subscribe(MQTT_PATH)
 
-    def on_message(self, client, userdata, msg):
-        print(msg.topic + " PAYLOAD: " + msg.payload.decode("utf-8"))
-        asyncio.run(set_backlight(msg.payload.decode("utf-8")))
+async def main():
+	async with mqtt.Client(MQTT_SERVER, MQTT_PORT, username=MQTT_USER, password=MQTT_PASSWORD, client_id="mqtt-lg-backlight") as client:
+		async with client.messages() as messages:
+			await client.subscribe(MQTT_PATH)
+			async for message in messages:
+				print(message.topic, message.payload)
+				await set_backlight(message.payload.decode("utf-8"))
 
-listener = Listener()
+
+if __name__ == '__main__':
+	asyncio.run(main())
